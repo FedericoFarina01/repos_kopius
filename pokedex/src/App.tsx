@@ -32,36 +32,36 @@ type Pokemon = {
 
 function App() {
 	const [pokemons, setPokemons] = useState<Pokemon[]>([]);
-	const [pokemonsCapturados, setCapturados] = useState<Pokemon[]>([]);
-	const [nombreBusqueda, setNombreBusqueda] = useState("");
-	const [tipoBusqueda, setTipoBusqueda] = useState("");
+	const [capturedPokemons, setCapturedPokemons] = useState<Pokemon[]>([]);
+	const [nameSearch, setNameSearch] = useState("");
+	const [typeSearch, setTypeSearch] = useState("");
 
-	const listaTipos: string[] = [];
+	const typesList: string[] = [];
 	for (const pokemon of pokemons) {
 		for (const t of pokemon.types) {
-			const tipo = t.type.name;
-			if (!listaTipos.includes(tipo)) {
-				listaTipos.push(tipo);
+			const type = t.type.name;
+			if (!typesList.includes(type)) {
+				typesList.push(type);
 			}
 		}
 	}
 
-	// Filtrar por nombre
-	const pokemonsFiltradosPorNombre = nombreBusqueda
+	// Filter by name
+	const pokemonsFilteredByName = nameSearch
 		? pokemons.filter((p) =>
-				p.name.toLowerCase().includes(nombreBusqueda.toLowerCase()),
+				p.name.toLowerCase().includes(nameSearch.toLowerCase()),
 			)
 		: pokemons;
 
-	// Filtrar por tipo
-	const pokemonsFiltradosPorTipo = tipoBusqueda
-		? pokemonsFiltradosPorNombre.filter((p) =>
-				p.types.find((t) => t.type.name === tipoBusqueda),
+	// Filter by type
+	const pokemonsFilteredByType = typeSearch
+		? pokemonsFilteredByName.filter((p) =>
+				p.types.find((t) => t.type.name === typeSearch),
 			)
-		: pokemonsFiltradosPorNombre;
+		: pokemonsFilteredByName;
 
-	const totalPokemons = pokemonsFiltradosPorTipo.length;
-	const totalCapturados = pokemonsCapturados.length;
+	const totalPokemons = pokemonsFilteredByType.length;
+	const totalCaptured = capturedPokemons.length;
 
 	useEffect(() => {
 		async function run() {
@@ -70,15 +70,15 @@ function App() {
 			);
 			const data = await response.json();
 
-			const pokemonsCompletos: Pokemon[] = [];
+			const completedPokemons: Pokemon[] = [];
 			for (const p of data.results) {
 				const res = await fetch(p.url);
 				const pokemonData = await res.json();
 				const pokemon = v.parse(PokemonSchema, pokemonData);
-				pokemonsCompletos.push(pokemon);
+				completedPokemons.push(pokemon);
 			}
 
-			setPokemons(pokemonsCompletos);
+			setPokemons(completedPokemons);
 		}
 
 		run();
@@ -89,23 +89,23 @@ function App() {
 			<h1>Pokedex</h1>
 			<div>
 				<label>
-					Buscar Pokemon:{" "}
+					Search pokemon:{" "}
 					<input
 						name="filtro-nombre"
-						value={nombreBusqueda}
-						onChange={(e) => setNombreBusqueda(e.target.value)}
+						value={nameSearch}
+						onChange={(e) => setNameSearch(e.target.value)}
 					/>
 				</label>
 				<label>
 					<select
 						name="filtro-tipo"
-						value={tipoBusqueda}
-						onChange={(e) => setTipoBusqueda(e.target.value)}
+						value={typeSearch}
+						onChange={(e) => setTypeSearch(e.target.value)}
 					>
-						<option value="">Todos</option>
-						{listaTipos.map((tipo) => (
-							<option key={tipo} value={tipo}>
-								{tipo}
+						<option value="">All</option>
+						{typesList.map((type) => (
+							<option key={type} value={type}>
+								{type}
 							</option>
 						))}
 					</select>
@@ -117,22 +117,22 @@ function App() {
 						<h2>Pokemons ({totalPokemons})</h2>
 
 						<div className="pokemon-list">
-							{pokemonsFiltradosPorTipo.map((pokemon) => (
+							{pokemonsFilteredByType.map((pokemon) => (
 								<div key={pokemon.id} className="card">
 									<img src={pokemon.sprites.front_default} alt={pokemon.name} />
 									<h3>{pokemon.name.toUpperCase()}</h3>
 									<p>
-										Tipo: {pokemon.types.map((t) => t.type.name).join(", ")}
+										Type: {pokemon.types.map((t) => t.type.name).join(", ")}
 									</p>
 									<button
 										type="button"
 										onClick={() => {
-											const pokemonCapturado = pokemonsCapturados.find(
+											const capturedPokemon = capturedPokemons.find(
 												(p) => p.id === pokemon.id,
 											);
 
-											if (!pokemonCapturado) {
-												setCapturados([...pokemonsCapturados, pokemon]);
+											if (!capturedPokemon) {
+												setCapturedPokemons([...capturedPokemons, pokemon]);
 												setPokemons(
 													pokemons.filter((p) => p.id !== pokemon.id),
 												);
@@ -144,12 +144,11 @@ function App() {
 								</div>
 							))}
 						</div>
-					</section>
-
+					</section>{" "}
 					<section>
-						<h2>Pokemons Capturados ({totalCapturados})</h2>
-						<div className="pokemonCapturados-list">
-							{pokemonsCapturados.map((pokemon) => (
+						<h2>Captured Pokemons ({totalCaptured})</h2>
+						<div className="capturedPokemons-list">
+							{capturedPokemons.map((pokemon) => (
 								<div key={pokemon.id} className="card">
 									<img src={pokemon.sprites.front_default} alt={pokemon.name} />
 									<h3>{pokemon.name.toUpperCase()}</h3>
@@ -161,8 +160,8 @@ function App() {
 										onClick={() => {
 											setPokemons([...pokemons, pokemon]);
 
-											setCapturados(
-												pokemonsCapturados.filter((p) => p.id !== pokemon.id),
+											setCapturedPokemons(
+												capturedPokemons.filter((p) => p.id !== pokemon.id),
 											);
 										}}
 									>
@@ -174,7 +173,7 @@ function App() {
 					</section>
 				</>
 			) : (
-				<p>No hay Pokemons disponibles</p>
+				<p>No pokemons available</p>
 			)}
 		</main>
 	);
