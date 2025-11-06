@@ -32,7 +32,12 @@ type Pokemon = {
 
 function App() {
 	const [pokemons, setPokemons] = useState<Pokemon[]>([]);
-	const [capturedPokemons, setCapturedPokemons] = useState<Pokemon[]>([]);
+	const [capturedPokemons, setCapturedPokemons] = useState<Pokemon[]>(() => {
+		const saved = localStorage.getItem("capturedPokemons");
+		const initialValue = saved ? JSON.parse(saved) : [];
+		return initialValue;
+	});
+
 	const [nameSearch, setNameSearch] = useState("");
 	const [typeSearch, setTypeSearch] = useState("");
 
@@ -45,6 +50,10 @@ function App() {
 			}
 		}
 	}
+
+	useEffect(() => {
+		localStorage.setItem("capturedPokemons", JSON.stringify(capturedPokemons));
+	}, [capturedPokemons]);
 
 	// Filter by name
 	const pokemonsFilteredByName = nameSearch
