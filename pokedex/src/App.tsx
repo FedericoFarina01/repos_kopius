@@ -2,75 +2,73 @@ import { useEffect, useState } from "react";
 import * as v from "valibot";
 import "./App.css";
 
+const TypeSchema = v.object({
+  type: v.object({
+    name: v.string(),
+  }),
+});
 const PokemonSchema = v.object({
   id: v.number(),
   name: v.string(),
   sprites: v.object({
     front_default: v.string(),
   }),
-  types: v.array(
-    v.object({
-      type: v.object({
-        name: v.string(),
-      }),
-    }),
-  ),
+  types: v.array(TypeSchema),
 });
-
-type Pokemon = {
-  id: number;
-  name: string;
-  sprites: {
-    front_default: string;
-  };
-  types: Array<{
-    type: {
-      name: string;
-    };
-  }>;
-};
+type Pokemon = v.InferOutput<typeof PokemonSchema>;
+const RawPokemonSchema = v.object({
+  name: v.string(),
+  url: v.string(),
+});
 
 function App() {
   const [pokemons, setPokemons] = useState<Pokemon[]>([]);
   const [capturedPokemons, setCapturedPokemons] = useState<Pokemon[]>(() => {
     const saved = localStorage.getItem("capturedPokemons");
-    const initialValue = saved ? JSON.parse(saved) : [];
-    return initialValue;
+    if (!saved) {
+      return [];
+    }
+    const capturedPokemons = v.parse(v.array(PokemonSchema), JSON.parse(saved));
+    return capturedPokemons;
   });
-
   const [nameSearch, setNameSearch] = useState("");
   const [typeSearch, setTypeSearch] = useState("");
 
-  const typesList: string[] = [];
-  for (const pokemon of pokemons) {
-    for (const t of pokemon.types) {
-      const type = t.type.name;
-      if (!typesList.includes(type)) {
-        typesList.push(type);
+  const types = pokemons.reduce<Array<string>>((acc, pokemon) => {
+    for (const type of pokemon.types) {
+      const name = type.type.name;
+      if (!acc.includes(name)) {
+        acc.push(name);
       }
     }
-  }
+    return acc;
+  }, []);
+  console.log("types", types);
 
   useEffect(() => {
     localStorage.setItem("capturedPokemons", JSON.stringify(capturedPokemons));
   }, [capturedPokemons]);
 
-  // Filter by name
-  const pokemonsFilteredByName = nameSearch
-    ? pokemons.filter((p) =>
-        p.name.toLowerCase().includes(nameSearch.toLowerCase()),
-      )
-    : pokemons;
+  const showingPokemons = pokemons
+    .filter((pokemon) => {
+      if (!nameSearch) {
+        return true;
+      }
+      return pokemon.name.toLowerCase().includes(nameSearch.toLowerCase());
+    })
+    .filter((pokemon) => {
+      if (!typeSearch) {
+        return true;
+      }
+      const type = pokemon.types.find((type) => type.type.name === typeSearch);
+      if (type) {
+        return true;
+      }
+      return false;
+    });
 
-  // Filter by type
-  const pokemonsFilteredByType = typeSearch
-    ? pokemonsFilteredByName.filter((p) =>
-        p.types.find((t) => t.type.name === typeSearch),
-      )
-    : pokemonsFilteredByName;
-
-  const totalPokemons = pokemonsFilteredByType.length;
-  const totalCaptured = capturedPokemons.length;
+  const pokemonsCount = showingPokemons.length;
+  const capturedCount = capturedPokemons.length;
 
   useEffect(() => {
     async function run() {
@@ -78,18 +76,17 @@ function App() {
         "https://pokeapi.co/api/v2/pokemon?limit=10&offset=0",
       );
       const data = await response.json();
-
-      const completedPokemons: Pokemon[] = [];
-      for (const p of data.results) {
-        const res = await fetch(p.url);
-        const pokemonData = await res.json();
-        const pokemon = v.parse(PokemonSchema, pokemonData);
-        completedPokemons.push(pokemon);
-      }
-
-      setPokemons(completedPokemons);
+      const rawPokemons = v.parse(v.array(RawPokemonSchema), data.results);
+      const pokemons = await Promise.all(
+        rawPokemons.map(async (rawPokemon) => {
+          const response = await fetch(rawPokemon.url);
+          const data = await response.json();
+          const pokemon = v.parse(PokemonSchema, data);
+          return pokemon;
+        }),
+      );
+      setPokemons(pokemons);
     }
-
     run();
   }, []);
 
@@ -102,17 +99,21 @@ function App() {
           <input
             name="filtro-nombre"
             value={nameSearch}
-            onChange={(e) => setNameSearch(e.target.value)}
+            onChange={(event) => {
+              setNameSearch(event.target.value);
+            }}
           />
         </label>
         <label>
           <select
             name="filtro-tipo"
             value={typeSearch}
-            onChange={(e) => setTypeSearch(e.target.value)}
+            onChange={(event) => {
+              setTypeSearch(event.target.value);
+            }}
           >
             <option value="">All</option>
-            {typesList.map((type) => (
+            {types.map((type) => (
               <option key={type} value={type}>
                 {type}
               </option>
@@ -120,18 +121,18 @@ function App() {
           </select>
         </label>
       </div>
-      {totalPokemons > 0 ? (
+      {pokemonsCount > 0 ? (
         <>
           <section>
-            <h2>Pokemons ({totalPokemons})</h2>
-
+            <h2>Pokemons ({pokemonsCount})</h2>
             <div className="pokemon-list">
-              {pokemonsFilteredByType.map((pokemon) => (
+              {showingPokemons.map((pokemon) => (
                 <div key={pokemon.id} className="card">
                   <img src={pokemon.sprites.front_default} alt={pokemon.name} />
                   <h3>{pokemon.name.toUpperCase()}</h3>
                   <p>
-                    Type: {pokemon.types.map((t) => t.type.name).join(", ")}
+                    Type:{" "}
+                    {pokemon.types.map((type) => type.type.name).join(", ")}
                   </p>
                   <button
                     type="button"
@@ -143,7 +144,9 @@ function App() {
                       if (!capturedPokemon) {
                         setCapturedPokemons([...capturedPokemons, pokemon]);
                         setPokemons(
-                          pokemons.filter((p) => p.id !== pokemon.id),
+                          pokemons.filter(
+                            (pokemon) => pokemon.id !== pokemon.id,
+                          ),
                         );
                       }
                     }}
@@ -155,14 +158,15 @@ function App() {
             </div>
           </section>{" "}
           <section>
-            <h2>Captured Pokemons ({totalCaptured})</h2>
+            <h2>Captured Pokemons ({capturedCount})</h2>
             <div className="capturedPokemons-list">
               {capturedPokemons.map((pokemon) => (
                 <div key={pokemon.id} className="card">
                   <img src={pokemon.sprites.front_default} alt={pokemon.name} />
                   <h3>{pokemon.name.toUpperCase()}</h3>
                   <p>
-                    Tipo: {pokemon.types.map((t) => t.type.name).join(", ")}
+                    Tipo:{" "}
+                    {pokemon.types.map((type) => type.type.name).join(", ")}
                   </p>
                   <button
                     type="button"
@@ -170,7 +174,9 @@ function App() {
                       setPokemons([...pokemons, pokemon]);
 
                       setCapturedPokemons(
-                        capturedPokemons.filter((p) => p.id !== pokemon.id),
+                        capturedPokemons.filter(
+                          (pokemon) => pokemon.id !== pokemon.id,
+                        ),
                       );
                     }}
                   >
