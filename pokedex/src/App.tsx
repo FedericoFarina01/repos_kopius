@@ -138,7 +138,7 @@ function App() {
                     type="button"
                     onClick={() => {
                       const capturedPokemon = capturedPokemons.find(
-                        (p) => p.id === pokemon.id,
+                        (pokemon) => pokemon.id === pokemon.id,
                       );
 
                       if (!capturedPokemon) {
