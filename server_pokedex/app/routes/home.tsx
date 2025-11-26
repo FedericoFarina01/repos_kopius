@@ -33,21 +33,24 @@ const INTENT = {
 export async function action({ request }: Route.ActionArgs) {
 	const formData = await request.formData();
 	const intent = formData.get("intent");
-
 	const url = new URL(request.url);
 
+	// TODO: replace multiple if with `switch` stemement
 	if (intent === INTENT.SET_FILTERS) {
-		const name = formData.get("name")?.toString() ?? "";
-		const type = formData.get("type")?.toString() ?? "";
+		const name = formData.get("name");
+		const type = formData.get("type");
 
-		const url = new URL(request.url);
 		if (name) {
+		        // TODO: validate the "name" here using valibot
+			// after that, you'll be able to use it in the
+			// "searchParams.set" as a value without having an error
 			url.searchParams.set("name", name);
 		} else {
 			url.searchParams.delete("name");
 		}
 
 		if (type) {
+		        // TODO: validate the "type" here using valibot
 			url.searchParams.set("type", type);
 		} else {
 			url.searchParams.delete("type");
@@ -56,6 +59,12 @@ export async function action({ request }: Route.ActionArgs) {
 		return redirect(url.toString());
 	}
 
+	// TODO: to me, "captured" is a adjective. I'm missing the noun here.
+	// "catpuredWHAT"?
+	// NOTE: what happens if captured is not of the expected shape "captured=1,5,3"
+	//       and instead it's ANY other thing. "captured=b8224bvsjsjLLLLL"
+	//       that's why it's important to validate your incoming data
+	//       in this case "url.searchParams.get("captured")" should be validated before used
 	const capturedIds =
 		url.searchParams.get("captured")?.split(",").map(Number) ?? [];
 
@@ -73,6 +82,7 @@ export async function action({ request }: Route.ActionArgs) {
 	if (intent === INTENT.RELEASE) {
 		const id = Number(formData.get("id"));
 
+		// TODO: don't use name contractions
 		const updatedCaptured = capturedIds.filter((c) => c !== id);
 
 		url.searchParams.set("captured", updatedCaptured.join(","));
