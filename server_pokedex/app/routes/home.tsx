@@ -24,6 +24,19 @@ const RawPokemonSchema = v.object({
 	url: v.string(),
 });
 
+const CapturedQueryParamSchema = v.pipe(
+	v.string(),
+	v.transform((value) => {
+		if (!value) {
+			return [];
+		}
+		return value
+			.split(",")
+			.map(Number)
+			.filter((id) => !Number.isNaN(id));
+	}),
+);
+
 const INTENT = {
 	SET_FILTERS: "Set_filters",
 	CAPTURE: "capture",
@@ -32,70 +45,72 @@ const INTENT = {
 
 export async function action({ request }: Route.ActionArgs) {
 	const formData = await request.formData();
-	const intent = formData.get("intent");
+	const intent = formData.get("intent")?.toString();
 	const url = new URL(request.url);
 
-	// TODO: replace multiple if with `switch` stemement
-	if (intent === INTENT.SET_FILTERS) {
-		const name = formData.get("name");
-		const type = formData.get("type");
+	switch (intent) {
+		case INTENT.SET_FILTERS: {
+			const name = formData.get("name");
+			const type = formData.get("type");
 
-		if (name) {
-		        // TODO: validate the "name" here using valibot
-			// after that, you'll be able to use it in the
-			// "searchParams.set" as a value without having an error
-			url.searchParams.set("name", name);
-		} else {
-			url.searchParams.delete("name");
+			if (name) {
+				const validatedName = v.parse(v.string(), name);
+				url.searchParams.set("name", validatedName);
+			} else {
+				url.searchParams.delete("name");
+			}
+
+			if (type) {
+				const validatedType = v.parse(v.string(), type);
+				url.searchParams.set("type", validatedType);
+			} else {
+				url.searchParams.delete("type");
+			}
+
+			return redirect(url.toString());
 		}
 
-		if (type) {
-		        // TODO: validate the "type" here using valibot
-			url.searchParams.set("type", type);
-		} else {
-			url.searchParams.delete("type");
+		case INTENT.CAPTURE: {
+			const capturedParam = url.searchParams.get("captured") ?? "";
+			const capturedPokemonIds = v.parse(
+				CapturedQueryParamSchema,
+				capturedParam,
+			);
+			const id = Number(formData.get("id"));
+
+			const updatedCaptured = capturedPokemonIds.includes(id)
+				? capturedPokemonIds
+				: [...capturedPokemonIds, id];
+
+			url.searchParams.set("captured", updatedCaptured.join(","));
+			return redirect(url.toString());
 		}
 
-		return redirect(url.toString());
+		case INTENT.RELEASE: {
+			const capturedParam = url.searchParams.get("captured") ?? "";
+			const capturedPokemonIds = v.parse(
+				CapturedQueryParamSchema,
+				capturedParam,
+			);
+			const id = Number(formData.get("id"));
+
+			const updatedCaptured = capturedPokemonIds.filter((capturedId) => {
+				return capturedId !== id;
+			});
+
+			url.searchParams.set("captured", updatedCaptured.join(","));
+			return redirect(url.toString());
+		}
+
+		default:
+			return redirect(request.url);
 	}
-
-	// TODO: to me, "captured" is a adjective. I'm missing the noun here.
-	// "catpuredWHAT"?
-	// NOTE: what happens if captured is not of the expected shape "captured=1,5,3"
-	//       and instead it's ANY other thing. "captured=b8224bvsjsjLLLLL"
-	//       that's why it's important to validate your incoming data
-	//       in this case "url.searchParams.get("captured")" should be validated before used
-	const capturedIds =
-		url.searchParams.get("captured")?.split(",").map(Number) ?? [];
-
-	if (intent === INTENT.CAPTURE) {
-		const id = Number(formData.get("id"));
-
-		const updatedCaptured = capturedIds.includes(id)
-			? capturedIds
-			: [...capturedIds, id];
-
-		url.searchParams.set("captured", updatedCaptured.join(","));
-		return redirect(url.toString());
-	}
-
-	if (intent === INTENT.RELEASE) {
-		const id = Number(formData.get("id"));
-
-		// TODO: don't use name contractions
-		const updatedCaptured = capturedIds.filter((c) => c !== id);
-
-		url.searchParams.set("captured", updatedCaptured.join(","));
-		return redirect(url.toString());
-	}
-
-	return redirect(request.url);
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
 	const url = new URL(request.url);
-	const capturedIds =
-		url.searchParams.get("captured")?.split(",").map(Number) ?? [];
+	const capturedParam = url.searchParams.get("captured") ?? "";
+	const capturedPokemonIds = v.parse(CapturedQueryParamSchema, capturedParam);
 
 	const response = await fetch(
 		"https://pokeapi.co/api/v2/pokemon?limit=10&offset=0",
@@ -114,22 +129,23 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 	return {
 		pokemons,
-		capturedIds,
+		capturedPokemonIds,
 	};
 }
 
 export default function Pokedex({ loaderData }: Route.ComponentProps) {
-	const { pokemons, capturedIds } = loaderData;
+	const { pokemons, capturedPokemonIds } = loaderData;
 
-	const uncaughtPokemons = pokemons.filter(
-		(pokemon) => !capturedIds.includes(pokemon.id),
-	);
+	const uncaughtPokemons = pokemons.filter((pokemon) => {
+		return !capturedPokemonIds.includes(pokemon.id);
+	});
 
-	const capturedPokemons = pokemons.filter((pokemon) =>
-		capturedIds.includes(pokemon.id),
-	);
+	const capturedPokemons = pokemons.filter((pokemon) => {
+		return capturedPokemonIds.includes(pokemon.id);
+	});
 
 	const pokemonsCount = uncaughtPokemons.length;
+
 	const capturedCount = capturedPokemons.length;
 
 	return (
