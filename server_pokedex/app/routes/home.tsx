@@ -18,8 +18,6 @@ const PokemonSchema = v.object({
   types: v.array(TypeSchema),
 });
 
-type Pokemon = v.InferOutput<typeof PokemonSchema>;
-
 const RawPokemonSchema = v.object({
   name: v.string(),
   url: v.string(),
@@ -28,13 +26,7 @@ const RawPokemonSchema = v.object({
 const CapturedQueryParamSchema = v.pipe(
   v.string(),
   v.transform((value) => {
-    if (!value) {
-      return [];
-    }
-    return value
-      .split(",")
-      .map(Number)
-      .filter((id) => !Number.isNaN(id));
+    return value.split(",").map(Number);
   }),
 );
 
@@ -72,17 +64,26 @@ export async function action({ request }: Route.ActionArgs) {
     }
 
     case INTENT.CAPTURE: {
-      const capturedParam = url.searchParams.get("captured") ?? "";
-      const capturedPokemonIds = v.parse(
-        CapturedQueryParamSchema,
-        capturedParam,
-      );
+      // NOTE: no default values for "searchParams.get", ever.
+      // use "null" to determine absence of value first.
+      // this way, there is a clearer intent and the code can be followed easier
+      const capturedParam = url.searchParams.get("captured");
+      const capturedPokemonIds = capturedParam
+        ? v.parse(CapturedQueryParamSchema, capturedParam)
+        : [];
+      // TODO: strictly type the return type of "formData.get" before using it
       const id = Number(formData.get("id"));
 
-      const updatedCaptured = capturedPokemonIds.includes(id)
-        ? capturedPokemonIds
-        : [...capturedPokemonIds, id];
+      // NOTE: we early return if the "id" is already captured.
+      // clearer intent and we avoid an unnecesary redirection
+      if (capturedPokemonIds.includes(id)) {
+        return null;
+      }
 
+      const updatedCaptured = [...capturedPokemonIds, id];
+
+      // TODO: you don't serialize the array yourself. Use "JSON.stringify" instead.
+      // Rely on already existent best pratices
       url.searchParams.set("captured", updatedCaptured.join(","));
       return redirect(url.toString());
     }
@@ -99,6 +100,8 @@ export async function action({ request }: Route.ActionArgs) {
         return capturedId !== id;
       });
 
+      // TODO: you don't serialize the array yourself. Use "JSON.stringify" instead.
+      // Rely on already existent best pratices
       url.searchParams.set("captured", updatedCaptured.join(","));
       return redirect(url.toString());
     }
